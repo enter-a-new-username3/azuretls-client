@@ -53,11 +53,9 @@ func (s *Session) buildResponse(response *Response, httpResponse *http.Response)
 				u, _ = url.Parse(response.Url)
 			}
 
-			if !response.Request.NoCookie {
-				cookies := httpResponse.Cookies()
-				s.CookieJar.SetCookies(u, cookies)
-				response.Cookies = GetCookiesMap(cookies)
-			}
+			cookies := httpResponse.Cookies()
+			s.CookieJar.SetCookies(u, cookies)
+			response.Cookies = GetCookiesMap(cookies)
 
 			response.ContentLength = httpResponse.ContentLength
 
@@ -81,11 +79,9 @@ func (s *Session) buildResponse(response *Response, httpResponse *http.Response)
 				u, _ = url.Parse(response.Url)
 			}
 
-			if !response.Request.NoCookie {
-				cookies := httpResponse.Cookies()
-				s.CookieJar.SetCookies(u, cookies)
-				response.Cookies = GetCookiesMap(cookies)
-			}
+			cookies := httpResponse.Cookies()
+			s.CookieJar.SetCookies(u, cookies)
+			response.Cookies = GetCookiesMap(cookies)
 
 			response.ContentLength = httpResponse.ContentLength
 		}
@@ -99,11 +95,9 @@ func (s *Session) buildResponse(response *Response, httpResponse *http.Response)
 			u, _ = url.Parse(response.Url)
 		}
 
-		if !response.Request.NoCookie {
-			cookies := httpResponse.Cookies()
-			s.CookieJar.SetCookies(u, cookies)
-			response.Cookies = GetCookiesMap(cookies)
-		}
+		cookies := httpResponse.Cookies()
+		s.CookieJar.SetCookies(u, cookies)
+		response.Cookies = GetCookiesMap(cookies)
 
 		response.ContentLength = httpResponse.ContentLength
 	}

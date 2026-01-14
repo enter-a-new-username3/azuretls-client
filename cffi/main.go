@@ -40,7 +40,7 @@ typedef struct {
     int timeout_ms;
     int max_redirects;
     int insecure_skip_verify;
-    char* ordered_headers;
+    char* headers;
 } CFfiSessionConfig;
 */
 import "C"
@@ -54,6 +54,10 @@ import (
 	"sync"
 	"time"
 	"unsafe"
+
+	tls "github.com/Noooste/utls"
+
+	http "github.com/Noooste/fhttp"
 
 	"github.com/enter-a-new-username3/azuretls-client"
 )
@@ -73,35 +77,47 @@ var sessionManager = &SessionManager{
 	nextID:   1,
 }
 
+type TlsSpecificationsInput struct {
+	AlpnProtocols                           []string                  `json:"alpn_protocols,omitempty"`
+	SignatureAlgorithms                     []tls.SignatureScheme     `json:"signature_algorithms,omitempty"`
+	SupportedVersions                       []uint16                  `json:"supported_versions,omitempty"`
+	CertCompressionAlgos                    []tls.CertCompressionAlgo `json:"cert_compression_algos,omitempty"`
+	DelegatedCredentialsAlgorithmSignatures []tls.SignatureScheme     `json:"delegated_credentials_algorithm_signatures,omitempty"`
+	PSKKeyExchangeModes                     []uint8                   `json:"psk_key_exchange_modes,omitempty"`
+	SignatureAlgorithmsCert                 []tls.SignatureScheme     `json:"signature_algorithms_cert,omitempty"`
+	ApplicationSettingsProtocols            []string                  `json:"application_settings_protocols,omitempty"`
+	RenegotiationSupport                    tls.RenegotiationSupport  `json:"renegotiation_support,omitempty"`
+	RecordSizeLimit                         uint16                    `json:"record_size_limit,omitempty"`
+}
+
 // Request structure for JSON marshaling/unmarshaling
 type RequestData struct {
-	Method             string            `json:"method,omitempty"`
-	URL                string            `json:"url"`
-	Body               interface{}       `json:"body,omitempty"`
-	BodyB64            string            `json:"body_b64,omitempty"` // Base64 encoded binary body
-	Headers            map[string]string `json:"headers,omitempty"`
-	OrderedHeaders     [][]string        `json:"ordered_headers,omitempty"`
-	Proxy              string            `json:"proxy,omitempty"`
-	TimeoutMs          int               `json:"timeout_ms,omitempty"`
-	ForceHTTP1         bool              `json:"force_http1,omitempty"`
-	ForceHTTP3         bool              `json:"force_http3,omitempty"`
-	IgnoreBody         bool              `json:"ignore_body,omitempty"`
-	NoCookie           bool              `json:"no_cookie,omitempty"`
-	DisableRedirects   bool              `json:"disable_redirects,omitempty"`
-	MaxRedirects       uint              `json:"max_redirects,omitempty"`
-	InsecureSkipVerify bool              `json:"insecure_skip_verify,omitempty"`
+	Method             string      `json:"method,omitempty"`
+	URL                string      `json:"url"`
+	Body               interface{} `json:"body,omitempty"`
+	BodyB64            string      `json:"body_b64,omitempty"` // Base64 encoded binary body
+	Headers            http.Header `json:"headers,omitempty"`
+	Proxy              string      `json:"proxy,omitempty"`
+	TimeoutMs          int         `json:"timeout_ms,omitempty"`
+	ForceHTTP1         bool        `json:"force_http1,omitempty"`
+	ForceHTTP3         bool        `json:"force_http3,omitempty"`
+	IgnoreBody         bool        `json:"ignore_body,omitempty"`
+	NoCookie           bool        `json:"no_cookie,omitempty"`
+	DisableRedirects   bool        `json:"disable_redirects,omitempty"`
+	MaxRedirects       uint        `json:"max_redirects,omitempty"`
+	InsecureSkipVerify bool        `json:"insecure_skip_verify,omitempty"`
 }
 
 // SessionConfig structure for JSON marshaling
 type SessionConfig struct {
-	Browser            string            `json:"browser,omitempty"`
-	UserAgent          string            `json:"user_agent,omitempty"`
-	Proxy              string            `json:"proxy,omitempty"`
-	TimeoutMs          int               `json:"timeout_ms,omitempty"`
-	MaxRedirects       uint              `json:"max_redirects,omitempty"`
-	InsecureSkipVerify bool              `json:"insecure_skip_verify,omitempty"`
-	OrderedHeaders     [][]string        `json:"ordered_headers,omitempty"`
-	Headers            map[string]string `json:"headers,omitempty"`
+	Browser            string      `json:"browser,omitempty"`
+	UserAgent          string      `json:"user_agent,omitempty"`
+	Proxy              string      `json:"proxy,omitempty"`
+	TimeoutMs          int         `json:"timeout_ms,omitempty"`
+	MaxRedirects       uint        `json:"max_redirects,omitempty"`
+	ErrOnMaxRedirects  bool        `json:"err_on_max_redirects,omitempty"`
+	InsecureSkipVerify bool        `json:"insecure_skip_verify,omitempty"`
+	Headers            http.Header `json:"headers,omitempty"`
 }
 
 // Helper function to convert Go string to C string
@@ -217,7 +233,6 @@ func (sm *SessionManager) closeAllSessions() {
 //export azuretls_session_new
 func azuretls_session_new(configJSON *C.char) uintptr {
 	session := azuretls.NewSession()
-
 	if configJSON != nil {
 		configStr := cStringToGoString(configJSON)
 		var config SessionConfig
@@ -238,19 +253,18 @@ func azuretls_session_new(configJSON *C.char) uintptr {
 			if config.MaxRedirects > 0 {
 				session.MaxRedirects = config.MaxRedirects
 			}
-			session.InsecureSkipVerify = config.InsecureSkipVerify
-
-			if len(config.OrderedHeaders) > 0 {
-				session.OrderedHeaders = make(azuretls.OrderedHeaders, len(config.OrderedHeaders))
-				for i, header := range config.OrderedHeaders {
-					session.OrderedHeaders[i] = header
+			if !config.ErrOnMaxRedirects {
+				session.CheckRedirect = func(req *azuretls.Request, reqs []*azuretls.Request) error {
+					if uint(len(reqs)) >= req.MaxRedirects {
+						return azuretls.ErrUseLastResponse
+					}
+					return nil
 				}
 			}
+			session.InsecureSkipVerify = config.InsecureSkipVerify
 
 			if len(config.Headers) > 0 {
-				for k, v := range config.Headers {
-					session.Header.Set(k, v)
-				}
+				session.Header = config.Headers
 			}
 		}
 	}
@@ -310,16 +324,10 @@ func azuretls_session_do(sessionID uintptr, requestJSON *C.char) *C.CFfiResponse
 	}
 
 	// Handle headers
-	if len(reqData.OrderedHeaders) > 0 {
-		req.OrderedHeaders = make(azuretls.OrderedHeaders, len(reqData.OrderedHeaders))
-		for i, header := range reqData.OrderedHeaders {
-			req.OrderedHeaders[i] = header
-		}
+	if len(reqData.Headers) > 0 {
+		req.Header = reqData.Headers
 	} else if len(reqData.Headers) > 0 {
 		req.Header = make(map[string][]string)
-		for k, v := range reqData.Headers {
-			req.Header[k] = []string{v}
-		}
 	}
 
 	// Decode Base64 body if present
@@ -380,7 +388,7 @@ func azuretls_session_do_bytes(sessionID uintptr, method *C.char, url *C.char, h
 }
 
 //export azuretls_session_apply_ja3
-func azuretls_session_apply_ja3(sessionID uintptr, ja3 *C.char, navigator *C.char) *C.char {
+func azuretls_session_apply_ja3(sessionID uintptr, ja3 *C.char, navigator *C.char, tlsSpecifications *C.char) *C.char {
 	session, exists := sessionManager.getSession(sessionID)
 	if !exists {
 		return goStringToCString("session not found")
@@ -388,13 +396,35 @@ func azuretls_session_apply_ja3(sessionID uintptr, ja3 *C.char, navigator *C.cha
 
 	ja3Str := cStringToGoString(ja3)
 	navStr := cStringToGoString(navigator)
+	tlsSpecificationsStr := cStringToGoString(tlsSpecifications)
 
 	if navStr == "" {
 		navStr = azuretls.Chrome
 	}
+	if tlsSpecificationsStr == "" {
+		if err := session.ApplyJa3(ja3Str, navStr); err != nil {
+			return goStringToCString(err.Error())
+		}
+	} else {
+		var tlsSpecificationsData TlsSpecificationsInput
+		if err := json.Unmarshal([]byte(tlsSpecificationsStr), &tlsSpecificationsData); err != nil {
+			return goStringToCString(err.Error())
+		}
 
-	if err := session.ApplyJa3(ja3Str, navStr); err != nil {
-		return goStringToCString(err.Error())
+		tlsSpecificationsReal := azuretls.TlsSpecifications{}
+		tlsSpecificationsReal.AlpnProtocols = tlsSpecificationsData.AlpnProtocols
+		tlsSpecificationsReal.SignatureAlgorithms = tlsSpecificationsData.SignatureAlgorithms
+		tlsSpecificationsReal.SupportedVersions = tlsSpecificationsData.SupportedVersions
+		tlsSpecificationsReal.CertCompressionAlgos = tlsSpecificationsData.CertCompressionAlgos
+		tlsSpecificationsReal.DelegatedCredentialsAlgorithmSignatures = tlsSpecificationsData.DelegatedCredentialsAlgorithmSignatures
+		tlsSpecificationsReal.PSKKeyExchangeModes = tlsSpecificationsData.PSKKeyExchangeModes
+		tlsSpecificationsReal.SignatureAlgorithmsCert = tlsSpecificationsData.SignatureAlgorithmsCert
+		tlsSpecificationsReal.ApplicationSettingsProtocols = tlsSpecificationsData.ApplicationSettingsProtocols
+		tlsSpecificationsReal.RenegotiationSupport = tlsSpecificationsData.RenegotiationSupport
+		tlsSpecificationsReal.RecordSizeLimit = tlsSpecificationsData.RecordSizeLimit
+		if err := session.ApplyJa3WithSpecifications(ja3Str, &tlsSpecificationsReal, navStr); err != nil {
+			return goStringToCString(err.Error())
+		}
 	}
 
 	return nil
