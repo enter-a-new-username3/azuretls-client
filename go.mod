@@ -1,4 +1,4 @@
-module github.com/Noooste/azuretls-client
+module github.com/enter-a-new-username3/azuretls-client
 
 go 1.24.0
 

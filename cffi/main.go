@@ -55,7 +55,7 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/Noooste/azuretls-client"
+	"github.com/enter-a-new-username3/azuretls-client"
 )
 
 // Version information - will be set during build
