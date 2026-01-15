@@ -65,15 +65,24 @@ import (
 // Version information - will be set during build
 var Version = "dev"
 
+type Closable interface {
+	Close() error // or Close() if it returns nothing
+}
+
 // SessionManager manages active sessions with thread safety
-type SessionManager struct {
+type SessionManager[T Closable] struct {
 	mu       sync.RWMutex
-	sessions map[uintptr]*azuretls.Session
+	sessions map[uintptr]T
 	nextID   uintptr
 }
 
-var sessionManager = &SessionManager{
+var sessionManager = &SessionManager[*azuretls.Session]{
 	sessions: make(map[uintptr]*azuretls.Session),
+	nextID:   1,
+}
+
+var websocketSessionManager = &SessionManager[*azuretls.Websocket]{
+	sessions: make(map[uintptr]*azuretls.Websocket),
 	nextID:   1,
 }
 
@@ -118,6 +127,15 @@ type SessionConfig struct {
 	ErrOnMaxRedirects  bool        `json:"err_on_max_redirects,omitempty"`
 	InsecureSkipVerify bool        `json:"insecure_skip_verify,omitempty"`
 	Headers            http.Header `json:"headers,omitempty"`
+}
+
+type WebsocketConfig struct {
+	URL               string      `json:"url"`
+	ReadBufferSize    int         `json:"read_buffer_size,omitempty"`
+	WriteBufferSize   int         `json:"write_buffer_size,omitempty"`
+	Subprotocols      []string    `json:"subprotocols,omitempty"`
+	EnableCompression bool        `json:"enable_compression,omitempty"`
+	Headers           http.Header `json:"headers,omitempty"`
 }
 
 // Helper function to convert Go string to C string
@@ -192,7 +210,7 @@ func createCResponse(resp *azuretls.Response, err error) *C.CFfiResponse {
 }
 
 // Thread-safe method to get a session
-func (sm *SessionManager) getSession(sessionID uintptr) (*azuretls.Session, bool) {
+func (sm *SessionManager[T]) getSession(sessionID uintptr) (T, bool) {
 	sm.mu.RLock()
 	defer sm.mu.RUnlock()
 	session, exists := sm.sessions[sessionID]
@@ -200,7 +218,7 @@ func (sm *SessionManager) getSession(sessionID uintptr) (*azuretls.Session, bool
 }
 
 // Thread-safe method to add a session
-func (sm *SessionManager) addSession(session *azuretls.Session) uintptr {
+func (sm *SessionManager[T]) addSession(session T) uintptr {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
 	sessionID := sm.nextID
@@ -210,18 +228,19 @@ func (sm *SessionManager) addSession(session *azuretls.Session) uintptr {
 }
 
 // Thread-safe method to remove a session
-func (sm *SessionManager) removeSession(sessionID uintptr) *azuretls.Session {
+func (sm *SessionManager[T]) removeSession(sessionID uintptr) (T, bool) {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
-	if session, exists := sm.sessions[sessionID]; exists {
+	session, exists := sm.sessions[sessionID]
+	if exists {
 		delete(sm.sessions, sessionID)
-		return session
+		return session, true
 	}
-	return nil
+	return session, false
 }
 
 // Thread-safe method to close all sessions
-func (sm *SessionManager) closeAllSessions() {
+func (sm *SessionManager[T]) closeAllSessions() {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
 	for id, session := range sm.sessions {
@@ -279,7 +298,7 @@ func azuretls_session_new(configJSON *C.char) uintptr {
 
 //export azuretls_session_close
 func azuretls_session_close(sessionID uintptr) {
-	if session := sessionManager.removeSession(sessionID); session != nil {
+	if session, exist := sessionManager.removeSession(sessionID); exist && session != nil {
 		session.Close()
 	}
 }
@@ -611,6 +630,80 @@ func azuretls_session_get_cookies(sessionID uintptr, urlStr *C.char) *C.char {
 	}
 
 	return goStringToCString(string(cookiesJSON))
+}
+
+//export azuretls_session_new_websocket
+func azuretls_session_new_websocket(sessionId uintptr, config *C.char, outWsSessionId *uintptr) *C.char {
+	session, exists := sessionManager.getSession(sessionId)
+	if !exists {
+		return goStringToCString("session not found")
+	}
+	var wsConfig WebsocketConfig
+	err := json.Unmarshal([]byte(cStringToGoString(config)), &wsConfig)
+	if err != nil {
+		return goStringToCString(err.Error())
+	}
+	ws, err := session.NewWebsocket(
+		wsConfig.URL,
+		wsConfig.ReadBufferSize,
+		wsConfig.WriteBufferSize,
+		wsConfig.Subprotocols,
+		wsConfig.EnableCompression,
+		wsConfig.Headers,
+	)
+	if err != nil {
+		return goStringToCString(err.Error())
+	}
+	if ws == nil {
+		return goStringToCString("ws is nil")
+	}
+
+	*outWsSessionId = websocketSessionManager.addSession(ws)
+
+	// Prevent session from being garbage collected
+	runtime.SetFinalizer(ws, nil)
+
+	return nil
+}
+
+//export azuretls_websocket_close
+func azuretls_websocket_close(sessionID uintptr) {
+	if session, exist := websocketSessionManager.removeSession(sessionID); exist && session != nil {
+		session.Close()
+	}
+}
+
+//export azuretls_websocket_read_message
+func azuretls_websocket_read_message(sessionID uintptr, outMessageType *int, output **C.char, length *int) *C.char {
+	*output = nil
+	*length = 0
+	ws, exists := websocketSessionManager.getSession(sessionID)
+	if !exists || ws == nil {
+		return goStringToCString("session not found")
+	}
+	messageType, message, err := ws.ReadMessage()
+	if err != nil {
+		return goStringToCString(err.Error())
+	}
+	*outMessageType = messageType
+	*output = (*C.char)(C.CBytes(message))
+	*length = len(message)
+	return nil
+}
+
+//export azuretls_websocket_write_message
+func azuretls_websocket_write_message(sessionID uintptr, messageType int, message *C.char, length int) *C.char {
+	ws, exists := websocketSessionManager.getSession(sessionID)
+	if !exists || ws == nil {
+		return goStringToCString("session not found")
+	}
+
+	messageGo := C.GoBytes(unsafe.Pointer(message), C.int(length))
+	if err := ws.WriteMessage(messageType, messageGo); err != nil {
+		return goStringToCString(err.Error())
+	}
+
+	return nil
 }
 
 //export azuretls_free_string

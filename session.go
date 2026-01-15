@@ -452,7 +452,8 @@ func (c *Context) Context() context.Context {
 // It is recommended to call this function when the session is no longer needed.
 //
 // After calling this function, the session is no longer usable.
-func (s *Session) Close() {
+// Ignore return error.
+func (s *Session) Close() error {
 	s.mu.Lock()
 	s.closed = true
 	s.mu.Unlock()
@@ -488,7 +489,7 @@ func (s *Session) Close() {
 	s.loggingIgnore = nil
 	s.CookieJar = nil
 	s.ctx = nil
-
+	return nil
 	// Don't set s.mu = nil as it may cause race conditions
 }
 
