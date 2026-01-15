@@ -345,7 +345,7 @@ func azuretls_session_do(sessionID uintptr, requestJSON *C.char) *C.CFfiResponse
 	// Handle headers
 	if len(reqData.Headers) > 0 {
 		req.Header = reqData.Headers
-	} else if len(reqData.Headers) > 0 {
+	} else {
 		req.Header = make(map[string][]string)
 	}
 
