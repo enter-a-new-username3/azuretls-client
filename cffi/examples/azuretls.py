@@ -303,11 +303,9 @@ class AzureTLSSession:
                 request_data["body_b64"] = base64.b64encode(body)
 
         if headers is not None:
-            request_data["headers"] = {}
-            request_data["headers"]["Header-Order:"] = [
-                m.lower() for m in headers.keys()
-            ]
+            request_data["headers"] = {"Header-Order:": []}
             for k, v in headers.items():
+                request_data["headers"]["Header-Order:"].append(k.lower())
                 if isinstance(v, list):
                     request_data["headers"][k] = v
                 elif isinstance(v, str):
