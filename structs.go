@@ -191,7 +191,10 @@ type Request struct {
 	// Maximum number of redirects to follow.
 	MaxRedirects uint
 	// If true, cookies won't be included in the request.
-	NoCookie bool
+	DontSendCookies bool
+	// If true, cookies won't be saved to jar.
+	DontWriteCookies bool
+
 	// Maximum time to wait for request to complete.
 	TimeOut time.Duration
 	// Indicates if the current request is a result of a redirection.

@@ -1,11 +1,16 @@
 package azuretls
 
 import (
+	crand "crypto/rand"
 	"errors"
 	"fmt"
-	tls "github.com/Noooste/utls"
+	"math"
+	"math/big"
+	"math/rand"
 	"strconv"
 	"strings"
+
+	tls "github.com/Noooste/utls"
 )
 
 // TlsSpecifications struct contains various fields representing TLS handshake settings.
@@ -20,6 +25,7 @@ type TlsSpecifications struct {
 	ApplicationSettingsProtocols            []string
 	RenegotiationSupport                    tls.RenegotiationSupport
 	RecordSizeLimit                         uint16
+	PermuteExtensions                       bool
 }
 
 func DefaultTlsSpecifications(navigator string) *TlsSpecifications {
@@ -86,6 +92,7 @@ func DefaultTlsSpecifications(navigator string) *TlsSpecifications {
 		ApplicationSettingsProtocols: []string{"h2"},
 		RenegotiationSupport:         tls.RenegotiateOnceAsClient,
 		RecordSizeLimit:              recordSizeLimit,
+		PermuteExtensions:            navigator == Chrome,
 	}
 }
 
@@ -258,6 +265,42 @@ func isGrease(e uint16) bool {
 	i := (e & 0xf0) | 0x0a
 	i |= i << 8
 	return i == e
+}
+
+// https://github.com/bogdanfinn/utls/blob/83531d2fcbad5741b8f60c54d128165abd29e27e/u_parrots.go#L3204
+func ShuffleChromeTLSExtensions(exts []tls.TLSExtension) []tls.TLSExtension {
+	// unshufCheck checks if the exts[idx] is a GREASE/padding/pre_shared_key extension,
+	// and returns true on success. For these extensions are considered positionally invariant.
+	var skipShuf = func(idx int, exts []tls.TLSExtension) bool {
+		switch exts[idx].(type) {
+		case *tls.UtlsGREASEExtension, *tls.UtlsPaddingExtension, tls.PreSharedKeyExtension:
+			return true
+		default:
+			return false
+		}
+	}
+
+	// Shuffle other extensions
+	randInt64, err := crand.Int(crand.Reader, big.NewInt(math.MaxInt64))
+	if err != nil {
+		// warning: random could be deterministic
+		rand.Shuffle(len(exts), func(i, j int) {
+			if skipShuf(i, exts) || skipShuf(j, exts) {
+				return // do not shuffle some of the extensions
+			}
+			exts[i], exts[j] = exts[j], exts[i]
+		})
+		fmt.Println("Warning: failed to use a cryptographically secure random number generator. The shuffle can be deterministic.")
+	} else {
+		rand.New(rand.NewSource(randInt64.Int64())).Shuffle(len(exts), func(i, j int) {
+			if skipShuf(i, exts) || skipShuf(j, exts) {
+				return // do not shuffle some of the extensions
+			}
+			exts[i], exts[j] = exts[j], exts[i]
+		})
+	}
+
+	return exts
 }
 
 //gocyclo:ignore
@@ -486,7 +529,9 @@ func getExtensions(extensions []string, specifications *TlsSpecifications, defau
 			return nil, 0, 0, errors.New("invalid extension : " + extension)
 		}
 	}
-
+	if specifications.PermuteExtensions {
+		builtExtensions = ShuffleChromeTLSExtensions(builtExtensions)
+	}
 	if navigator == Chrome {
 		lastIndex := len(extensions) - 1
 		last := extensions[lastIndex]

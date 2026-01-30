@@ -97,6 +97,7 @@ type TlsSpecificationsInput struct {
 	ApplicationSettingsProtocols            []string                  `json:"application_settings_protocols,omitempty"`
 	RenegotiationSupport                    tls.RenegotiationSupport  `json:"renegotiation_support,omitempty"`
 	RecordSizeLimit                         uint16                    `json:"record_size_limit,omitempty"`
+	PermuteExtensions                       bool                      `json:"permute_extensions,omitempty"`
 }
 
 // Request structure for JSON marshaling/unmarshaling
@@ -111,7 +112,8 @@ type RequestData struct {
 	ForceHTTP1         bool        `json:"force_http1,omitempty"`
 	ForceHTTP3         bool        `json:"force_http3,omitempty"`
 	IgnoreBody         bool        `json:"ignore_body,omitempty"`
-	NoCookie           bool        `json:"no_cookie,omitempty"`
+	DontSendCookies    bool        `json:"dont_send_cookies,omitempty"`
+	DontWriteCookies   bool        `json:"dont_write_cookies,omitempty"`
 	DisableRedirects   bool        `json:"disable_redirects,omitempty"`
 	MaxRedirects       uint        `json:"max_redirects,omitempty"`
 	InsecureSkipVerify bool        `json:"insecure_skip_verify,omitempty"`
@@ -334,7 +336,8 @@ func azuretls_session_do(sessionID uintptr, requestJSON *C.char) *C.CFfiResponse
 	req.ForceHTTP1 = reqData.ForceHTTP1
 	req.ForceHTTP3 = reqData.ForceHTTP3
 	req.IgnoreBody = reqData.IgnoreBody
-	req.NoCookie = reqData.NoCookie
+	req.DontSendCookies = reqData.DontSendCookies
+	req.DontWriteCookies = reqData.DontWriteCookies
 	req.DisableRedirects = reqData.DisableRedirects
 	req.InsecureSkipVerify = reqData.InsecureSkipVerify
 
@@ -441,6 +444,7 @@ func azuretls_session_apply_ja3(sessionID uintptr, ja3 *C.char, navigator *C.cha
 		tlsSpecificationsReal.ApplicationSettingsProtocols = tlsSpecificationsData.ApplicationSettingsProtocols
 		tlsSpecificationsReal.RenegotiationSupport = tlsSpecificationsData.RenegotiationSupport
 		tlsSpecificationsReal.RecordSizeLimit = tlsSpecificationsData.RecordSizeLimit
+		tlsSpecificationsReal.PermuteExtensions = tlsSpecificationsData.PermuteExtensions
 		if err := session.ApplyJa3WithSpecifications(ja3Str, &tlsSpecificationsReal, navStr); err != nil {
 			return goStringToCString(err.Error())
 		}
@@ -638,6 +642,7 @@ func azuretls_session_new_websocket(sessionId uintptr, config *C.char, outWsSess
 	if !exists {
 		return goStringToCString("session not found")
 	}
+
 	var wsConfig WebsocketConfig
 	err := json.Unmarshal([]byte(cStringToGoString(config)), &wsConfig)
 	if err != nil {
@@ -651,6 +656,7 @@ func azuretls_session_new_websocket(sessionId uintptr, config *C.char, outWsSess
 		wsConfig.EnableCompression,
 		wsConfig.Headers,
 	)
+
 	if err != nil {
 		return goStringToCString(err.Error())
 	}

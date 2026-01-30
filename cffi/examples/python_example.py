@@ -7,7 +7,7 @@ This example demonstrates how to use the AzureTLS CFFI library from Python.
 
 import json
 
-from azuretls import AzureTLSSession
+from azuretls import AzureTLSSession, AzureTLSWebsocket
 
 
 def main():
@@ -17,52 +17,20 @@ def main():
 
     # Create session with configuration
     config = {
-        "browser": "chrome",
-        "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        "browser": "firefox",
         "timeout_ms": 30000,
         "max_redirects": 10,
+        "insecure_skip_verify": True,
     }
 
     try:
         with AzureTLSSession(config) as session:
-            # Example 1: Simple GET request
-            print("\n1. Simple GET request:")
-            response = session.get("https://fp.impersonate.pro/api/http3")
-            if response.error:
-                print(f"Error: {response.error}")
-            else:
-                print(f"Status: {response.status_code}")
-                print(f"Protocol: {response.protocol}")
-                print(f"URL: {response.url}")
-                if response.text:
-                    body_json = response.json()
-                    print(
-                        f"User-Agent: {body_json.get('headers', {}).get('User-Agent', 'N/A')}"
-                    )
-
-            # Example 2: POST request with JSON body
-            print("\n2. POST request with JSON:")
-            post_data = json.dumps({"message": "Hello from AzureTLS Python!"})
-            response = session.post(
-                "https://httpbin.org/post",
-                body=post_data,
-                headers={"Content-Type": "application/json"},
-            )
-            if response.error:
-                print(f"Error: {response.error}")
-            else:
-                print(f"Status: {response.status_code}")
-                print(f"Protocol: {response.protocol}")
-                if response.text:
-                    body_json = json.loads(response.text)
-                    print(f"Received data: {body_json.get('json', {})}")
-
-            http2_fp = "1:65536,2:0,3:1000,4:6291456,6:262144|15663105|0|m,s,a,p"
+            http2_fp = "1:4096;2:1;3:100;4:2097152;5:16384;6:4294967295|15663105|0|m,s,p,a"
             session.apply_http2(http2_fp)
-            ja3 = "771,4865-4866-4867-49195-49199-49196-49200-52393-52392-49171-49172-156-157-47-53,0-23-65281-10-11-35-16-5-13-18-51-45-43-27-17513,29-23-24,0"
+            ja3 = "771,4866-4865-4867-49196-49200-49195-52393-49199-52392-49162-49161-49172-49171,0-23-65281-10-11-16-5-13-18-51-45-43-27,4588-29-23-24-25,0"
             session.apply_ja3(
                 ja3,
-                "chrome",
+                "firefox",
                 {
                     "alpn_protocols": ["h2", "http/1.1"],
                     "signature_algorithms": [
@@ -98,6 +66,33 @@ def main():
                     "record_size_limit": 0,
                 },
             )
+            # Example 1: Simple GET request
+            print("\n1. Simple GET request:")
+            response = session.get("https://api.ipify.org")
+            if response.error:
+                print(f"Error: {response.error}")
+            else:
+                print(f"Status: {response.status_code}")
+                print(f"Protocol: {response.protocol}")
+                print(f"URL: {response.url}")
+
+            # Example 2: POST request with JSON body
+            print("\n2. POST request with JSON:")
+            post_data = json.dumps({"message": "Hello from AzureTLS Python!"})
+            response = session.post(
+                "https://httpbin.org/post",
+                body=post_data,
+                headers={"Content-Type": "application/json"},
+            )
+            if response.error:
+                print(f"Error: {response.error}")
+            else:
+                print(f"Status: {response.status_code}")
+                print(f"Protocol: {response.protocol}")
+                if response.text:
+                    body_json = json.loads(response.text)
+                    print(f"Received data: {body_json.get('json', {})}")
+
             # Example 3: JA3 fingerprinting
             print("\n3. Applying JA3 fingerprint:")
             try:
@@ -118,6 +113,8 @@ def main():
                     "HTTP/2 fingerprint apply status:",
                     response.json()["http2"]["akamai_fingerprint"] == http2_fp,
                 )
+                print(response.json()["http2"]["akamai_fingerprint"])
+                print(http2_fp)
             except Exception as e:
                 print(f"HTTP/2 error: {e}")
 
@@ -128,15 +125,6 @@ def main():
                 print(f"IP with proxy: {response.text}")
             except Exception as e:
                 print(f"Proxy error: {e}")
-            print("text", session.get("https://httpbin.org/cookies/set/a/b").text)
-            print(session.get("https://httpbin.org/get", no_cookie=True).text)
-            print(
-                session.get(
-                    "https://httpbin.org/get",
-                    no_cookie=True,
-                    headers={"Cookie": ["q=1", "q=2", "q=3"]},
-                ).text
-            )
 
             # Example 7: Get cookies
             print("\n7. Cookie management:")
@@ -149,6 +137,42 @@ def main():
 
             except Exception as e:
                 print(f"Cookie error: {e}")
+
+            print("\n8. Websocket")
+            try:
+                ws = AzureTLSWebsocket(
+                    session.session_id,
+                    "wss://premws-pt1.365lpodds.com/zap/?uid=8704747766393455",
+                    headers={
+                        "Host": None,
+                        "sec-ch-ua": '"Chromium";v="142", "Google Chrome";v="142", "Not_A Brand";v="99"',
+                        "sec-ch-ua-mobile": "?0",
+                        "sec-ch-ua-platform": '"macOS"',
+                        "Upgrade-Insecure-Requests": "1",
+                        "User-Agent": "Mozilla (Linux; Android 12 Phone; CPU M2003J15SC OS 12 like Gecko) Chrome/141.0.7390.122 Gen6 bet365/8.0.14.00",
+                        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+                        "Sec-Fetch-Site": "none",
+                        "Sec-Fetch-Mode": "navigate",
+                        "Sec-Fetch-User": "?1",
+                        "Sec-Fetch-Dest": "document",
+                        "Accept-Encoding": "gzip, deflate, br, zstd",
+                        "Accept-Language": "tr-TR,tr;q=0.9",
+                        "Priority": "u=0, i",
+                        "Pragma": "no-cache",
+                        "Cache-Control": "no-cache",
+                        "Origin": "https://www.bet365.com",
+                        "Sec-GPC": "1",
+                    },
+                    enable_compression=True,
+                    read_buffer_size=1024,
+                    write_buffer_size=1024,
+                    subprotocols=["zap-protocol-v2"],
+                )
+                while True:
+                    message, type = ws.recv()
+                    print(message, type)
+            except Exception as e:
+                print("WS Error:", e)
 
             print("\nExample completed successfully!")
 

@@ -3,10 +3,11 @@ package azuretls
 import (
 	"context"
 	"errors"
-	http "github.com/Noooste/fhttp"
-	"github.com/Noooste/websocket"
 	"net"
 	url2 "net/url"
+
+	http "github.com/Noooste/fhttp"
+	"github.com/Noooste/websocket"
 )
 
 type Websocket struct {
@@ -64,7 +65,7 @@ func (s *Session) NewWebsocketWithContext(ctx context.Context, url string, readB
 		return nil, err
 	}
 
-	if !req.NoCookie {
+	if !req.DontSendCookies {
 		cookies := s.CookieJar.Cookies(req.parsedUrl)
 		if cookies != nil && len(cookies) > 0 {
 			if c := req.HttpRequest.Header.Get("Cookie"); c != "" {

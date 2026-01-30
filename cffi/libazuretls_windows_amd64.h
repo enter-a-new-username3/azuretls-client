@@ -140,6 +140,10 @@ extern __declspec(dllexport) char* azuretls_session_add_pins(GoUintptr sessionID
 extern __declspec(dllexport) char* azuretls_session_clear_pins(GoUintptr sessionID, char* urlStr);
 extern __declspec(dllexport) char* azuretls_session_get_ip(GoUintptr sessionID);
 extern __declspec(dllexport) char* azuretls_session_get_cookies(GoUintptr sessionID, char* urlStr);
+extern __declspec(dllexport) char* azuretls_session_new_websocket(GoUintptr sessionId, char* config, GoUintptr* outWsSessionId);
+extern __declspec(dllexport) void azuretls_websocket_close(GoUintptr sessionID);
+extern __declspec(dllexport) char* azuretls_websocket_read_message(GoUintptr sessionID, GoInt* outMessageType, char** output, GoInt* length);
+extern __declspec(dllexport) char* azuretls_websocket_write_message(GoUintptr sessionID, GoInt messageType, char* message, GoInt length);
 extern __declspec(dllexport) void azuretls_free_string(char* str);
 extern __declspec(dllexport) void azuretls_free_response(CFfiResponse* resp);
 extern __declspec(dllexport) char* azuretls_version(void);

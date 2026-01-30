@@ -122,7 +122,7 @@ func (s *Session) buildRequest(ctx context.Context, req *Request) (err error) {
 	req.disableDecompression = s.DisableAutoDecompression
 	req.formatHeader()
 
-	if !req.NoCookie {
+	if !req.DontSendCookies {
 		cookies := s.CookieJar.Cookies(req.HttpRequest.URL)
 		if cookies != nil && len(cookies) > 0 {
 			if c := req.HttpRequest.Header.Get("Cookie"); c != "" {
