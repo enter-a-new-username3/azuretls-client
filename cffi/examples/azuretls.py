@@ -5,7 +5,7 @@ import os
 import platform
 import urllib.parse
 from typing import Any, Dict, List, NotRequired, Optional, TypedDict
-
+from pathlib import Path
 
 class TlsSpecificationsInput(TypedDict):
     alpn_protocols: NotRequired[List[str]]
@@ -103,23 +103,19 @@ def _load_library():
         ext = ".so"
 
     # Try to find the library
-    lib_name = f".\\libazuretls_{system}_{arch}{ext}"
+    lib_name = f"libazuretls_{system}_{arch}{ext}"
 
     # Search paths
     search_paths = [
-        r"C:\Users\iused3\github_repos\azuretls-client\cffi\libazuretls_windows_amd64.dll",
-        os.path.join(os.path.dirname(__file__), "..", "build", lib_name),
-        os.path.join(os.path.dirname(__file__), "..", lib_name),
-        os.path.join(os.path.dirname(__file__), lib_name),
-        lib_name,  # Try system paths
+        Path(__file__).parent / "azure_libraries" / lib_name
     ]
 
     lib = None
     for path in search_paths:
         try:
-            if os.path.exists(path):
+            if path.exists():
                 print(path)
-                lib = ctypes.CDLL(path)
+                lib = ctypes.CDLL(path.absolute())
                 break
         except OSError:
             continue
@@ -331,6 +327,8 @@ class AzureTLSSession:
 
         try:
             response = AzureTLSResponse(c_response)
+            if response.error:
+                raise RuntimeError(response.error)
             return response
         finally:
             azure_lib.azuretls_free_response(c_response)
