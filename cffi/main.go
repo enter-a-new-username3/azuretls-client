@@ -89,6 +89,7 @@ var websocketSessionManager = &SessionManager[*azuretls.Websocket]{
 type TlsSpecificationsInput struct {
 	AlpnProtocols                           []string                  `json:"alpn_protocols,omitempty"`
 	SignatureAlgorithms                     []tls.SignatureScheme     `json:"signature_algorithms,omitempty"`
+	KeyShares                               tls.KeyShares             `json:"key_shares,omitempty"`
 	SupportedVersions                       []uint16                  `json:"supported_versions,omitempty"`
 	CertCompressionAlgos                    []tls.CertCompressionAlgo `json:"cert_compression_algos,omitempty"`
 	DelegatedCredentialsAlgorithmSignatures []tls.SignatureScheme     `json:"delegated_credentials_algorithm_signatures,omitempty"`
@@ -436,6 +437,7 @@ func azuretls_session_apply_ja3(sessionID uintptr, ja3 *C.char, navigator *C.cha
 		tlsSpecificationsReal := azuretls.TlsSpecifications{}
 		tlsSpecificationsReal.AlpnProtocols = tlsSpecificationsData.AlpnProtocols
 		tlsSpecificationsReal.SignatureAlgorithms = tlsSpecificationsData.SignatureAlgorithms
+		tlsSpecificationsReal.KeyShares = tlsSpecificationsData.KeyShares
 		tlsSpecificationsReal.SupportedVersions = tlsSpecificationsData.SupportedVersions
 		tlsSpecificationsReal.CertCompressionAlgos = tlsSpecificationsData.CertCompressionAlgos
 		tlsSpecificationsReal.DelegatedCredentialsAlgorithmSignatures = tlsSpecificationsData.DelegatedCredentialsAlgorithmSignatures

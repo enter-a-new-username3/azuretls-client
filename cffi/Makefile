@@ -5,7 +5,7 @@ GOOS := $(shell go env GOOS)
 GOARCH := $(shell go env GOARCH)
 
 # Output directory
-BUILD_DIR := build
+BUILD_DIR := azure_libraries
 
 # Library name
 LIB_NAME := azuretls

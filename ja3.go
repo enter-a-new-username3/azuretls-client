@@ -17,6 +17,7 @@ import (
 type TlsSpecifications struct {
 	AlpnProtocols                           []string
 	SignatureAlgorithms                     []tls.SignatureScheme
+	KeyShares                               tls.KeyShares
 	SupportedVersions                       []uint16
 	CertCompressionAlgos                    []tls.CertCompressionAlgo
 	DelegatedCredentialsAlgorithmSignatures []tls.SignatureScheme
@@ -477,26 +478,31 @@ func getExtensions(extensions []string, specifications *TlsSpecifications, defau
 			break
 
 		case "51":
-			switch navigator {
-			case Chrome:
-				builtExtensions = append(builtExtensions, &tls.KeyShareExtension{KeyShares: []tls.KeyShare{
-					{Group: tls.GREASE_PLACEHOLDER, Data: []byte{0}},
-					{Group: tls.X25519MLKEM768},
-					{Group: tls.X25519},
-				}})
-			case Firefox:
-				builtExtensions = append(builtExtensions, &tls.KeyShareExtension{KeyShares: []tls.KeyShare{
-					{Group: tls.X25519MLKEM768},
-					{Group: tls.X25519},
-					{Group: tls.CurveP256},
-				}})
-			default: //firefox
-				builtExtensions = append(builtExtensions, &tls.KeyShareExtension{KeyShares: []tls.KeyShare{
-					{Group: tls.X25519},
-					{Group: tls.CurveP256},
-				}})
-			}
+			builtExtensions = append(builtExtensions, &tls.KeyShareExtension{
+				KeyShares: specifications.KeyShares,
+			})
 			break
+			/*
+				switch navigator {
+				case Chrome:
+					builtExtensions = append(builtExtensions, &tls.KeyShareExtension{KeyShares: []tls.KeyShare{
+						{Group: tls.GREASE_PLACEHOLDER, Data: []byte{0}},
+						{Group: tls.X25519MLKEM768},
+						{Group: tls.X25519},
+					}})
+				case Firefox:
+					builtExtensions = append(builtExtensions, &tls.KeyShareExtension{KeyShares: []tls.KeyShare{
+						{Group: tls.X25519MLKEM768},
+						{Group: tls.X25519},
+						{Group: tls.CurveP256},
+					}})
+				default: //firefox
+					builtExtensions = append(builtExtensions, &tls.KeyShareExtension{KeyShares: []tls.KeyShare{
+						{Group: tls.X25519},
+						{Group: tls.CurveP256},
+					}})
+				}
+			*/
 
 		case "13172":
 			builtExtensions = append(builtExtensions, &tls.NPNExtension{})
