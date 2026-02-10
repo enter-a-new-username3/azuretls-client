@@ -478,12 +478,12 @@ func getExtensions(extensions []string, specifications *TlsSpecifications, defau
 			break
 
 		case "51":
-			builtExtensions = append(builtExtensions, &tls.KeyShareExtension{
+			/*builtExtensions = append(builtExtensions, &tls.KeyShareExtension{
 				KeyShares: specifications.KeyShares,
 			})
-			break
-			/*
-				switch navigator {
+			*/
+			
+			switch navigator {
 				case Chrome:
 					builtExtensions = append(builtExtensions, &tls.KeyShareExtension{KeyShares: []tls.KeyShare{
 						{Group: tls.GREASE_PLACEHOLDER, Data: []byte{0}},
@@ -501,8 +501,9 @@ func getExtensions(extensions []string, specifications *TlsSpecifications, defau
 						{Group: tls.X25519},
 						{Group: tls.CurveP256},
 					}})
-				}
-			*/
+			}
+			break
+			
 
 		case "13172":
 			builtExtensions = append(builtExtensions, &tls.NPNExtension{})

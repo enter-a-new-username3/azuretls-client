@@ -4,12 +4,18 @@ import json
 import os
 import platform
 import urllib.parse
-from typing import Any, Dict, List, NotRequired, Optional, TypedDict
 from pathlib import Path
+from typing import Any, Dict, List, NotRequired, Optional, TypedDict
+
+
+class KeyShare(TypedDict):
+    group: int
+    data: Optional[bytes]
 
 class TlsSpecificationsInput(TypedDict):
     alpn_protocols: NotRequired[List[str]]
     signature_algorithms: NotRequired[List[int]]
+    key_shares: NotRequired[List[KeyShare]]
     supported_versions: NotRequired[List[int]]
     cert_compression_algos: NotRequired[List[int]]
     delegated_credentials_algorithm_signatures: NotRequired[List[int]]
@@ -26,8 +32,8 @@ class AzureTLSResponse:
 
     def __init__(self, c_response):
         self.status_code = c_response.contents.status_code
-        self.text: Optional[str] = None
-        self.content: Optional[bytes] = None
+        self.text: str = ""
+        self.content: bytes = b""
         self.headers = None
         self.url = None
         self.error = None
@@ -106,16 +112,13 @@ def _load_library():
     lib_name = f"libazuretls_{system}_{arch}{ext}"
 
     # Search paths
-    search_paths = [
-        Path(__file__).parent / "azure_libraries" / lib_name
-    ]
-
+    search_paths = [Path(__file__).parent / "azure_libraries" / lib_name]
+    
     lib = None
     for path in search_paths:
         try:
             if path.exists():
-                print(path)
-                lib = ctypes.CDLL(path.absolute())
+                lib = ctypes.CDLL(str(path.absolute()))
                 break
         except OSError:
             continue
